@@ -1,16 +1,15 @@
 <template>
   <el-dialog
-    :visible="visible"
+    v-model="dialogVisible"
     :append-to-body="true"
     width="300px"
-    @close="$emit('update:visible', false)"
     class="c-Importphoto"
   >
     <el-row>
       <label for="idinput">抽奖号码</label>
       <el-input
         id="idinput"
-        size="mini"
+        size="small"
         type="number"
         v-model="id"
         :min="0"
@@ -37,105 +36,118 @@
     <el-row>
       支持jpg和png，照片大小不能超过150kb,建议20-50kb，建议尺寸为160*160px
     </el-row>
-    <el-row class="center">
-      <el-button size="mini" type="primary" @click="saveHandler"
+    <el-row class="c-Importphoto-center">
+      <el-button size="small" type="primary" @click="saveHandler"
         >保存</el-button
       >
-      <el-button size="mini" @click="$emit('update:visible', false)"
+      <el-button size="small" @click="closeDialog"
         >取消</el-button
       >
     </el-row>
   </el-dialog>
 </template>
-<script>
+
+<script setup>
+import { ref, computed, defineProps, defineEmits } from 'vue';
+import { ElMessage } from 'element-plus';
+import { useLuckyStore } from '@/stores';
 import { database, DB_STORE_NAME } from '@/helper/db';
 
-export default {
-  name: 'Importphoto',
-  props: {
-    visible: Boolean
-  },
-  computed: {
-    config: {
-      get() {
-        return this.$store.state.config;
+// 定义属性和事件
+const props = defineProps({
+  visible: Boolean
+});
+
+const emit = defineEmits(['update:visible', 'getPhoto']);
+
+// 使用 Pinia store
+const store = useLuckyStore();
+
+// 响应式数据
+const id = ref(0);
+const value = ref('');
+const filename = ref('点击选择照片');
+const uploadinput = ref(null);
+
+// 计算属性
+const dialogVisible = computed({
+  get: () => props.visible,
+  set: (value) => emit('update:visible', value)
+});
+
+const config = computed(() => store.config);
+
+// 方法
+const closeDialog = () => {
+  dialogVisible.value = false;
+};
+
+const inputChange = (e) => {
+  const fileList = e.target.files;
+  const formData = new FormData();
+  formData.append('uploadImg', fileList[0]);
+  const reader = new FileReader();
+  const AllowImgFileSize = 1024 * 150;
+  const file = fileList[0];
+  if (file) {
+    filename.value = file.name;
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      if (AllowImgFileSize != 0 && AllowImgFileSize < reader.result.length) {
+        return ElMessage.error('不允许上传大于150KB的图片');
+      } else {
+        value.value = reader.result;
       }
-    }
-  },
-  data() {
-    return {
-      id: 0,
-      value: '',
-      filename: '点击选择照片'
     };
-  },
-  methods: {
-    inputChange(e) {
-      const fileList = e.target.files;
-      const formData = new FormData();
-      formData.append('uploadImg', fileList[0]);
-      const reader = new FileReader();
-      const AllowImgFileSize = 1024 * 150;
-      const file = fileList[0];
-      if (file) {
-        this.filename = file.name;
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-          if (
-            AllowImgFileSize != 0 &&
-            AllowImgFileSize < reader.result.length
-          ) {
-            return this.$message.error('不允许上传大于150KB的图片');
-          } else {
-            this.value = reader.result;
-          }
-        };
+  }
+};
+
+const saveHandler = async () => {
+  const idValue = Number(id.value);
+  if (!idValue || idValue <= 0) {
+    return ElMessage.error('号码必须大于0的整数');
+  }
+  if (!value.value) {
+    return ElMessage.error('请选择照片');
+  }
+  
+  try {
+    const Data = await database.get(DB_STORE_NAME, idValue);
+    const param = {
+      id: idValue,
+      value: value.value
+    };
+    
+    const res = await database[Data ? 'edit' : 'add'](
+      DB_STORE_NAME,
+      Data ? idValue : param,
+      Data ? param : null
+    );
+    
+    if (res) {
+      if (uploadinput.value) {
+        uploadinput.value.value = '';
       }
-    },
-    async saveHandler() {
-      const { id, value } = this;
-      const ID = Number(id);
-      if (!ID || ID <= 0) {
-        return this.$message.error('号码必须大于0的整数');
-      }
-      if (!value) {
-        return this.$message.error('请选择照片');
-      }
-      const Data = await database.get(DB_STORE_NAME, ID);
-      const param = {
-        id: ID,
-        value
-      };
-      database[Data ? 'edit' : 'add'](
-        DB_STORE_NAME,
-        Data ? ID : param,
-        Data ? param : null
-      )
-        .then(res => {
-          if (res) {
-            this.$refs.uploadinput.value = '';
-            this.value = '';
-            this.filename = '点击选择照片';
-            this.$emit('update:visible', false);
-            this.$emit('getPhoto');
-            this.$message({
-              message: '保存成功',
-              type: 'success'
-            });
-          } else {
-            this.$message.error('保存失败');
-          }
-        })
-        .catch(err => {
-          this.$message.error(err.message);
-        });
+      value.value = '';
+      filename.value = '点击选择照片';
+      dialogVisible.value = false;
+      emit('getPhoto');
+      ElMessage({
+        message: '保存成功',
+        type: 'success'
+      });
+    } else {
+      ElMessage.error('保存失败');
     }
+  } catch (err) {
+    ElMessage.error(err.message);
   }
 };
 </script>
-<style lang="scss">
+
+<style lang="scss" scoped>
 .c-Importphoto {
-  .el-dialog {
+  :deep(.el-dialog) {
     height: 380px;
   }
   label {
@@ -147,9 +159,6 @@ export default {
   }
   .el-row {
     padding: 5px 0;
-  }
-  .center {
-    text-align: center;
   }
   .selectbg {
     display: inline-block;
@@ -199,5 +208,11 @@ export default {
       box-sizing: border-box;
     }
   }
+}
+</style>
+
+<style lang="scss">
+.c-Importphoto-center{
+  justify-content: center;
 }
 </style>

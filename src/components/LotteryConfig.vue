@@ -1,25 +1,26 @@
 <template>
   <el-dialog
-    :visible="visible"
+    v-model="dialogVisible"
     :append-to-body="true"
     width="390px"
-    @close="$emit('update:visible', false)"
     class="c-LotteryConfig"
   >
-    <div class="c-LotteryConfigtitle" slot="title">
-      <span :style="{ fontSize: '16px', marginRight: '20px' }">
-        抽奖配置
-      </span>
-      <el-button size="mini" @click="addLottery">增加奖项</el-button>
-      <el-button size="mini" type="primary" @click="onSubmit"
-        >保存配置</el-button
-      >
-      <el-button size="mini" @click="$emit('update:visible', false)"
-        >取消</el-button
-      >
-    </div>
+    <template #header>
+      <div class="c-LotteryConfigtitle">
+        <span :style="{ fontSize: '16px', marginRight: '20px' }">
+          抽奖配置
+        </span>
+        <el-button size="small" @click="addLottery">增加奖项</el-button>
+        <el-button size="small" type="primary" @click="onSubmit"
+          >保存配置</el-button
+        >
+        <el-button size="small" @click="closeDialog"
+          >取消</el-button
+        >
+      </div>
+    </template>
     <div class="container">
-      <el-form ref="form" :model="form" size="mini">
+      <el-form ref="formRef" :model="form" size="small">
         <el-form-item label="抽奖标题">
           <el-input v-model="form.name"></el-input>
         </el-form-item>
@@ -60,13 +61,15 @@
     </div>
 
     <el-dialog
-      :visible.sync="showAddLottery"
+      v-model="showAddLottery"
       :append-to-body="true"
       width="300px"
       class="dialog-showAddLottery"
     >
-      <div class="add-title" slot="title">增加奖项</div>
-      <el-form ref="newLottery" :model="newLottery" size="mini">
+      <template #header>
+        <div class="add-title">增加奖项</div>
+      </template>
+      <el-form ref="newLotteryRef" :model="newLottery" size="small">
         <el-form-item label="奖项名称">
           <el-input v-model="newLottery.name"></el-input>
         </el-form-item>
@@ -78,76 +81,91 @@
     </el-dialog>
   </el-dialog>
 </template>
-<script>
+
+<script setup>
+import { ref, computed, nextTick, defineProps, defineEmits } from 'vue';
+import { ElMessage } from 'element-plus';
+import { useLuckyStore } from '@/stores';
 import { setData, configField } from '@/helper/index';
 import { randomNum } from '@/helper/algorithm';
-export default {
-  name: 'LotteryConfig',
-  props: {
-    visible: Boolean
-  },
-  computed: {
-    form: {
-      get() {
-        return this.$store.state.config;
-      },
-      set(val) {
-        // this.$store.commit('setConfig', val);
-        return val;
-      }
-    },
-    storeNewLottery() {
-      return this.$store.state.newLottery;
-    }
-  },
-  data() {
-    return {
-      showAddLottery: false,
-      newLottery: { name: '' }
-    };
-  },
-  methods: {
-    onSubmit() {
-      setData(configField, this.form);
-      this.$store.commit('setConfig', this.form);
-      this.$emit('update:visible', false);
 
-      this.$message({
-        message: '保存成功',
-        type: 'success'
-      });
+// 定义属性和事件
+const props = defineProps({
+  visible: Boolean
+});
 
-      this.$nextTick(() => {
-        this.$emit('resetconfig');
-      });
-    },
-    addLottery() {
-      this.showAddLottery = true;
-    },
-    randomField() {
-      const str = 'abcdefghijklmnopqrstuvwxyz';
-      let fieldStr = '';
-      for (let index = 0; index < 10; index++) {
-        fieldStr += str.split('')[randomNum(1, 27) - 1];
-      }
-      return `${fieldStr}${Date.now()}`;
-    },
-    addHandler() {
-      const field = this.randomField();
-      const data = {
-        key: field,
-        name: this.newLottery.name
-      };
-      this.$store.commit('setNewLottery', data);
+const emit = defineEmits(['update:visible', 'resetconfig']);
 
-      this.showAddLottery = false;
-    }
+// 使用 Pinia store
+const store = useLuckyStore();
+
+// 响应式数据
+const showAddLottery = ref(false);
+const newLottery = ref({ name: '' });
+const formRef = ref(null);
+const newLotteryRef = ref(null);
+
+// 计算属性
+const dialogVisible = computed({
+  get: () => props.visible,
+  set: (value) => emit('update:visible', value)
+});
+
+const form = computed({
+  get: () => store.config,
+  set: (val) => val
+});
+
+const storeNewLottery = computed(() => store.newLottery);
+
+// 方法
+const closeDialog = () => {
+  dialogVisible.value = false;
+};
+
+const onSubmit = () => {
+  setData(configField, form.value);
+  store.setConfig(form.value);
+  dialogVisible.value = false;
+
+  ElMessage({
+    message: '保存成功',
+    type: 'success'
+  });
+
+  nextTick(() => {
+    emit('resetconfig');
+  });
+};
+
+const addLottery = () => {
+  showAddLottery.value = true;
+};
+
+const randomField = () => {
+  const str = 'abcdefghijklmnopqrstuvwxyz';
+  let fieldStr = '';
+  for (let index = 0; index < 10; index++) {
+    fieldStr += str.split('')[randomNum(1, 27) - 1];
   }
+  return `${fieldStr}${Date.now()}`;
+};
+
+const addHandler = () => {
+  const field = randomField();
+  const data = {
+    key: field,
+    name: newLottery.value.name
+  };
+  store.setNewLottery(data);
+
+  showAddLottery.value = false;
 };
 </script>
-<style lang="scss">
+
+<style lang="scss" scoped>
 .c-LotteryConfig {
-  .el-dialog__body {
+  :deep(.el-dialog__body) {
     height: 340px;
     .container {
       height: 100%;
@@ -156,7 +174,8 @@ export default {
     }
   }
 }
-.dialog-showAddLottery {
+
+:deep(.dialog-showAddLottery) {
   .el-dialog {
     height: 186px;
   }

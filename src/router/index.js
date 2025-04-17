@@ -1,19 +1,15 @@
-import Vue from 'vue';
-import VueRouter from 'vue-router';
-import Home from '../views/Home.vue';
+import { createRouter, createWebHashHistory } from 'vue-router';
 
-Vue.use(VueRouter);
+// 导入您的路由组件
+// 例如: import Home from '../views/Home.vue';
 
 const routes = [
-  {
-    path: '/',
-    name: 'home',
-    component: Home
-  }
+  // 您的路由配置
+  // 例如: { path: '/', name: 'Home', component: Home }
 ];
 
-const router = new VueRouter({
-  base: process.env.BASE_URL,
+const router = createRouter({
+  history: createWebHashHistory(),
   routes
 });
 

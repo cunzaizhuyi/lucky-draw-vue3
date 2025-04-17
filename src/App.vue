@@ -70,11 +70,7 @@
     <el-button
       class="audio"
       type="text"
-      @click="
-        () => {
-          playAudio(!audioPlaying);
-        }
-      "
+      @click="playAudio(!audioPlaying)"
     >
       <i
         class="iconfont"
@@ -82,7 +78,7 @@
       ></i>
     </el-button>
 
-    <LotteryConfig :visible.sync="showConfig" @resetconfig="reloadTagCanvas" />
+    <LotteryConfig v-model:visible="showConfig" @resetconfig="reloadTagCanvas" />
     <Tool
       @toggle="toggle"
       @resetConfig="reloadTagCanvas"
@@ -90,10 +86,10 @@
       :running="running"
       :closeRes="closeRes"
     />
-    <Result :visible.sync="showResult"></Result>
+    <Result v-model:visible="showResult"></Result>
 
     <span class="copy-right">
-      Copyright©zhangyongfeng5350@gmail.com
+      Copyright©feiye
     </span>
 
     <audio
@@ -110,10 +106,13 @@
     </audio>
   </div>
 </template>
-<script>
-import LotteryConfig from '@/components/LotteryConfig';
-import Publicity from '@/components/Publicity';
-import Tool from '@/components/Tool';
+
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { useLuckyStore } from '@/stores';
+import LotteryConfig from '@/components/LotteryConfig.vue';
+import Publicity from '@/components/Publicity.vue';
+import Tool from '@/components/Tool.vue';
 import bgaudio from '@/assets/bg.mp3';
 import beginaudio from '@/assets/begin.mp3';
 import {
@@ -125,251 +124,251 @@ import {
   listField,
 } from '@/helper/index';
 import { luckydrawHandler } from '@/helper/algorithm';
-import Result from '@/components/Result';
+import Result from '@/components/Result.vue';
 import { database, DB_STORE_NAME } from '@/helper/db';
-export default {
-  name: 'App',
 
-  components: { LotteryConfig, Publicity, Tool, Result },
+// 状态管理
+const store = useLuckyStore();
 
-  computed: {
-    resCardStyle() {
-      const style = { fontSize: '30px' };
-      const { number } = this.config;
-      if (number < 100) {
-        style.fontSize = '100px';
-      } else if (number < 1000) {
-        style.fontSize = '80px';
-      } else if (number < 10000) {
-        style.fontSize = '60px';
-      }
-      return style;
-    },
-    config: {
-      get() {
-        return this.$store.state.config;
-      },
-    },
-    result: {
-      get() {
-        return this.$store.state.result;
-      },
-      set(val) {
-        this.$store.commit('setResult', val);
-      },
-    },
-    list() {
-      return this.$store.state.list;
-    },
-    allresult() {
-      let allresult = [];
-      for (const key in this.result) {
-        if (this.result.hasOwnProperty(key)) {
-          const element = this.result[key];
-          allresult = allresult.concat(element);
-        }
-      }
-      return allresult;
-    },
-    datas() {
-      const { number } = this.config;
-      const nums = number >= 1500 ? 500 : this.config.number;
-      const configNum = number > 1500 ? Math.floor(number / 3) : number;
-      const randomShowNums = luckydrawHandler(configNum, [], nums);
-      const randomShowDatas = randomShowNums.map((item) => {
-        const listData = this.list.find((d) => d.key === item);
-        const photo = this.photos.find((d) => d.id === item);
-        return {
-          key: item * (number > 1500 ? 3 : 1),
-          name: listData ? listData.name : '',
-          photo: photo ? photo.value : '',
-        };
-      });
-      return randomShowDatas;
-    },
-    categoryName() {
-      return conversionCategoryName(this.category);
-    },
-    photos() {
-      return this.$store.state.photos;
-    },
-  },
-  created() {
-    const data = getData(configField);
-    if (data) {
-      this.$store.commit('setConfig', Object.assign({}, data));
+// 响应式数据
+const running = ref(false);
+const showRes = ref(false);
+const showConfig = ref(false);
+const showResult = ref(false);
+const resArr = ref([]);
+const category = ref('');
+const audioPlaying = ref(false);
+const audioSrc = ref(bgaudio);
+
+// 计算属性
+const resCardStyle = computed(() => {
+  const style = { fontSize: '30px' };
+  const { number } = store.config;
+  if (number < 100) {
+    style.fontSize = '100px';
+  } else if (number < 1000) {
+    style.fontSize = '80px';
+  } else if (number < 10000) {
+    style.fontSize = '60px';
+  }
+  return style;
+});
+
+const config = computed(() => store.config);
+const result = computed({
+  get: () => store.result,
+  set: (val) => store.setResult(val)
+});
+const list = computed(() => store.list);
+const photos = computed(() => store.photos);
+
+const allresult = computed(() => {
+  let results = [];
+  for (const key in result.value) {
+    if (Object.prototype.hasOwnProperty.call(result.value, key)) {
+      const element = result.value[key];
+      results = results.concat(element);
     }
-    const result = getData(resultField);
-    if (result) {
-      this.$store.commit('setResult', result);
-    }
+  }
+  return results;
+});
 
-    const newLottery = getData(newLotteryField);
-    if (newLottery) {
-      const config = this.config;
-      newLottery.forEach((item) => {
-        this.$store.commit('setNewLottery', item);
-        if (!config[item.key]) {
-          this.$set(config, item.key, 0);
-        }
-      });
-      this.$store.commit('setConfig', config);
-    }
-
-    const list = getData(listField);
-    if (list) {
-      this.$store.commit('setList', list);
-    }
-  },
-
-  data() {
+const datas = computed(() => {
+  const { number } = config.value;
+  const nums = number >= 1500 ? 500 : number;
+  const configNum = number > 1500 ? Math.floor(number / 3) : number;
+  const randomShowNums = luckydrawHandler(configNum, [], nums);
+  const randomShowDatas = randomShowNums.map((item) => {
+    const listData = list.value.find((d) => d.key === item);
+    const photo = photos.value.find((d) => d.id === item);
     return {
-      running: false,
-      showRes: false,
-      showConfig: false,
-      showResult: false,
-      resArr: [],
-      category: '',
-      audioPlaying: false,
-      audioSrc: bgaudio,
+      key: item * (number > 1500 ? 3 : 1),
+      name: listData ? listData.name : '',
+      photo: photo ? photo.value : '',
     };
-  },
-  watch: {
-    photos: {
-      deep: true,
-      handler() {
-        this.$nextTick(() => {
-          this.reloadTagCanvas();
-        });
-      },
-    },
-  },
-  mounted() {
-    this.startTagCanvas();
-    setTimeout(() => {
-      this.getPhoto();
-    }, 1000);
-    window.addEventListener('resize', this.reportWindowSize);
-  },
-  beforeDestroy() {
-    window.removeEventListener('resize', this.reportWindowSize);
-  },
-  methods: {
-    reportWindowSize() {
-      const AppCanvas = this.$el.querySelector('#rootcanvas');
-      if (AppCanvas.parentElement) {
-        AppCanvas.parentElement.removeChild(AppCanvas);
+  });
+  return randomShowDatas;
+});
+
+const categoryName = computed(() => conversionCategoryName(category.value));
+
+// 生命周期钩子
+onMounted(() => {
+  startTagCanvas();
+  setTimeout(() => {
+    getPhoto();
+  }, 1000);
+  window.addEventListener('resize', reportWindowSize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', reportWindowSize);
+});
+
+// 初始化数据
+const initData = () => {
+  const data = getData(configField);
+  if (data) {
+    store.setConfig(Object.assign({}, data));
+  }
+  
+  const resultData = getData(resultField);
+  if (resultData) {
+    store.setResult(resultData);
+  }
+
+  const newLottery = getData(newLotteryField);
+  if (newLottery) {
+    const configData = config.value;
+    newLottery.forEach((item) => {
+      store.setNewLottery(item);
+      if (!configData[item.key]) {
+        configData[item.key] = 0;
       }
-      this.startTagCanvas();
-    },
-    playHandler() {
-      this.audioPlaying = true;
-    },
-    pauseHandler() {
-      this.audioPlaying = false;
-    },
-    playAudio(type) {
-      if (type) {
-        this.$el.querySelector('#audiobg').play();
-      } else {
-        this.$el.querySelector('#audiobg').pause();
-      }
-    },
-    loadAudio() {
-      this.$el.querySelector('#audiobg').load();
-      this.$nextTick(() => {
-        this.$el.querySelector('#audiobg').play();
-      });
-    },
-    getPhoto() {
-      database.getAll(DB_STORE_NAME).then((res) => {
-        if (res && res.length > 0) {
-          this.$store.commit('setPhotos', res);
-        }
-      });
-    },
-    speed() {
-      return [0.1 * Math.random() + 0.01, -(0.1 * Math.random() + 0.01)];
-    },
-    createCanvas() {
-      const canvas = document.createElement('canvas');
-      canvas.width = document.body.offsetWidth;
-      canvas.height = document.body.offsetHeight;
-      canvas.id = 'rootcanvas';
-      this.$el.querySelector('#main').appendChild(canvas);
-    },
-    startTagCanvas() {
-      this.createCanvas();
-      const { speed } = this;
-      window.TagCanvas.Start('rootcanvas', 'tags', {
-        textColour: null,
-        initial: speed(),
-        dragControl: 1,
-        textHeight: 20,
-        noSelect: true,
-        lock: 'xy',
-      });
-    },
-    reloadTagCanvas() {
-      window.TagCanvas.Reload('rootcanvas');
-    },
-    closeRes() {
-      this.showRes = false;
-    },
-    toggle(form) {
-      const { speed, config } = this;
-      if (this.running) {
-        this.audioSrc = bgaudio;
-        this.loadAudio();
+    });
+    store.setConfig(configData);
+  }
 
-        window.TagCanvas.SetSpeed('rootcanvas', speed());
-        this.showRes = true;
-        this.running = !this.running;
-        this.$nextTick(() => {
-          this.reloadTagCanvas();
-        });
-      } else {
-        this.showRes = false;
-        if (!form) {
-          return;
-        }
+  const listData = getData(listField);
+  if (listData) {
+    store.setList(listData);
+  }
+};
+initData();
 
-        this.audioSrc = beginaudio;
-        this.loadAudio();
+// 监听照片变化
+watch(photos, () => {
+  nextTick(() => {
+    reloadTagCanvas();
+  });
+}, { deep: true });
 
-        const { number } = config;
-        const { category, mode, qty, remain, allin } = form;
-        let num = 1;
-        if (mode === 1 || mode === 5) {
-          num = mode;
-        } else if (mode === 0) {
-          num = remain;
-        } else if (mode === 99) {
-          num = qty;
-        }
-        const resArr = luckydrawHandler(
-          number,
-          allin ? [] : this.allresult,
-          num
-        );
-        this.resArr = resArr;
+// 方法
+const reportWindowSize = () => {
+  const AppCanvas = document.querySelector('#rootcanvas');
+  if (AppCanvas && AppCanvas.parentElement) {
+    AppCanvas.parentElement.removeChild(AppCanvas);
+  }
+  startTagCanvas();
+};
 
-        this.category = category;
-        if (!this.result[category]) {
-          this.$set(this.result, category, []);
-        }
-        const oldRes = this.result[category] || [];
-        const data = Object.assign({}, this.result, {
-          [category]: oldRes.concat(resArr),
-        });
-        this.result = data;
-        window.TagCanvas.SetSpeed('rootcanvas', [5, 1]);
-        this.running = !this.running;
-      }
-    },
-  },
+const playHandler = () => {
+  audioPlaying.value = true;
+};
+
+const pauseHandler = () => {
+  audioPlaying.value = false;
+};
+
+const playAudio = (type) => {
+  const audioBg = document.querySelector('#audiobg');
+  if (type) {
+    audioBg.play();
+  } else {
+    audioBg.pause();
+  }
+};
+
+const loadAudio = () => {
+  const audioBg = document.querySelector('#audiobg');
+  audioBg.load();
+  nextTick(() => {
+    audioBg.play();
+  });
+};
+
+const getPhoto = () => {
+  database.getAll(DB_STORE_NAME).then((res) => {
+    if (res && res.length > 0) {
+      store.setPhotos(res);
+    }
+  });
+};
+
+const speed = () => {
+  return [0.1 * Math.random() + 0.01, -(0.1 * Math.random() + 0.01)];
+};
+
+const createCanvas = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = document.body.offsetWidth;
+  canvas.height = document.body.offsetHeight - 50; // header的高度
+  canvas.id = 'rootcanvas';
+  document.querySelector('#main').appendChild(canvas);
+};
+
+const startTagCanvas = () => {
+  createCanvas();
+  window.TagCanvas.Start('rootcanvas', 'tags', {
+    textColour: null,
+    initial: speed(),
+    dragControl: 1,
+    textHeight: 20,
+    noSelect: true,
+    lock: 'xy',
+  });
+};
+
+const reloadTagCanvas = () => {
+  window.TagCanvas.Reload('rootcanvas');
+};
+
+const closeRes = () => {
+  showRes.value = false;
+};
+
+const toggle = (form) => {
+  if (running.value) {
+    audioSrc.value = bgaudio;
+    loadAudio();
+
+    window.TagCanvas.SetSpeed('rootcanvas', speed());
+    showRes.value = true;
+    running.value = !running.value;
+    nextTick(() => {
+      reloadTagCanvas();
+    });
+  } else {
+    showRes.value = false;
+    if (!form) {
+      return;
+    }
+
+    audioSrc.value = beginaudio;
+    loadAudio();
+
+    const { number } = config.value;
+    const { category: cat, mode, qty, remain, allin } = form;
+    let num = 1;
+    if (mode === 1 || mode === 5) {
+      num = mode;
+    } else if (mode === 0) {
+      num = remain;
+    } else if (mode === 99) {
+      num = qty;
+    }
+    const resultArray = luckydrawHandler(
+      number,
+      allin ? [] : allresult.value,
+      num
+    );
+    resArr.value = resultArray;
+
+    category.value = cat;
+    if (!result.value[cat]) {
+      result.value[cat] = [];
+    }
+    const oldRes = result.value[cat] || [];
+    const data = Object.assign({}, result.value, {
+      [cat]: oldRes.concat(resultArray),
+    });
+    result.value = data;
+    window.TagCanvas.SetSpeed('rootcanvas', [5, 1]);
+    running.value = !running.value;
+  }
 };
 </script>
+
 <style lang="scss">
 #root {
   height: 100%;
@@ -389,7 +388,7 @@ export default {
     position: relative;
     .el-button {
       position: absolute;
-      top: 17px;
+      top: 10px;
       padding: 0;
       z-index: 9999;
       &.con {
@@ -418,10 +417,16 @@ export default {
   }
   .copy-right {
     position: absolute;
-    right: 0;
-    bottom: 0;
+    right: 10px;
+    bottom: 10px;
     color: #ccc;
+    z-index: 1000;
     font-size: 12px;
+  }
+  #audiobg{
+    position: absolute;
+    left: 10px;
+    bottom: -100px;
   }
   .bounce-enter-active {
     animation: bounce-in 1.5s;
@@ -481,7 +486,6 @@ export default {
       bottom: 0;
       left: 0;
       font-size: 14px;
-      // border-radius: 50%;
       z-index: 1;
     }
   }

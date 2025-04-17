@@ -18,63 +18,66 @@
     </el-carousel>
   </div>
 </template>
-<script>
+
+<script setup>
+import { computed } from 'vue';
+import { useLuckyStore } from '@/stores';
 import { conversionCategoryName } from '@/helper/index';
 
-export default {
-  name: 'Publicity',
-  computed: {
-    config() {
-      return this.$store.state.config;
-    },
-    result() {
-      return this.$store.state.result;
-    },
-    message() {
-      const { result, config } = this;
-      const fields = Object.keys(config);
+// 使用 Pinia store
+const store = useLuckyStore();
 
-      let message = [{ key: 0, title: config.name }];
-      fields.forEach((item, index) => {
-        let label = conversionCategoryName(item);
-        if (result[item] && config[item] > 0) {
-          message.push({
-            key: index + 1,
-            title: `${label}抽奖结果:`,
-            value: `${
-              result[item].length > 0 ? result[item].join('、') : '暂未抽取'
-            }`
-          });
-        }
+// 计算属性
+const config = computed(() => store.config);
+const result = computed(() => store.result);
+
+const message = computed(() => {
+  const fields = Object.keys(config.value);
+  
+  let messageList = [{ key: 0, title: config.value.name }];
+  fields.forEach((item, index) => {
+    let label = conversionCategoryName(item);
+    if (result.value[item] && config.value[item] > 0) {
+      messageList.push({
+        key: index + 1,
+        title: `${label}抽奖结果:`,
+        value: `${
+          result.value[item].length > 0 ? result.value[item].join('、') : '暂未抽取'
+        }`
       });
-
-      return message;
     }
-  }
-};
+  });
+
+  return messageList;
+});
 </script>
-<style lang="scss">
+
+<style lang="scss" scoped>
 .c-Publicity {
   height: 100%;
-  // width: 1000px;
   background-color: rgba(255, 255, 255, 0.1);
   margin: 0 auto;
   position: relative;
   overflow: hidden;
-  .el-carousel {
+  
+  :deep(.el-carousel) {
     width: 80vw;
     margin: 0 auto;
   }
+  
   .item {
     text-align: center;
     color: #fff;
     font-size: 16px;
+    
     .title {
       color: #ccc;
     }
+    
     .value {
       margin-left: 10px;
     }
+    
     &.actiname {
       .title {
         color: red;

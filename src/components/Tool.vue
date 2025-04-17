@@ -1,24 +1,24 @@
 <template>
   <div id="tool">
-    <el-button @click="startHandler" type="primary" size="mini">{{
+    <el-button @click="startHandler" type="primary" size="small">{{
       running ? '停止' : '开始'
     }}</el-button>
-    <el-button size="mini" @click="showRemoveoptions = true">
+    <el-button size="small" @click="showRemoveoptions = true">
       重置
     </el-button>
-    <el-button size="mini" @click="showImport = true">
+    <el-button size="small" @click="showImport = true">
       导入名单
     </el-button>
-    <el-button size="mini" @click="showImportphoto = true">
+    <el-button size="small" @click="showImportphoto = true">
       导入照片
     </el-button>
     <el-dialog
       :append-to-body="true"
-      :visible.sync="showSetwat"
+      v-model="showSetwat"
       class="setwat-dialog"
       width="400px"
     >
-      <el-form ref="form" :model="form" label-width="80px" size="mini">
+      <el-form ref="formRef" :model="form" label-width="80px" size="small">
         <el-form-item label="抽取奖项">
           <el-select v-model="form.category" placeholder="请选取本次抽取的奖项">
             <el-option
@@ -79,7 +79,7 @@
 
     <el-dialog
       :append-to-body="true"
-      :visible.sync="showImport"
+      v-model="showImport"
       class="import-dialog"
       width="400px"
     >
@@ -94,24 +94,24 @@
         v-model="listStr"
       ></el-input>
       <div class="footer">
-        <el-button size="mini" type="primary" @click="transformList"
+        <el-button size="small" type="primary" @click="transformList"
           >确定</el-button
         >
-        <el-button size="mini" @click="showImport = false">取消</el-button>
+        <el-button size="small" @click="showImport = false">取消</el-button>
       </div>
     </el-dialog>
     <Importphoto
-      :visible.sync="showImportphoto"
+      v-model:visible="showImportphoto"
       @getPhoto="$emit('getPhoto')"
     ></Importphoto>
 
     <el-dialog
-      :visible.sync="showRemoveoptions"
+      v-model="showRemoveoptions"
       width="300px"
       class="c-removeoptions"
       :append-to-body="true"
     >
-      <el-form ref="form" :model="removeInfo" label-width="80px" size="mini">
+      <el-form ref="removeFormRef" :model="removeInfo" label-width="80px" size="small">
         <el-form-item label="重置选项">
           <el-radio-group v-model="removeInfo.type">
             <el-radio border :label="0">重置全部数据</el-radio>
@@ -130,7 +130,10 @@
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, watch, defineProps, defineEmits, nextTick } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { useLuckyStore } from '@/stores';
 import {
   clearData,
   removeData,
@@ -139,195 +142,198 @@ import {
   resultField,
   conversionCategoryName
 } from '@/helper/index';
-import Importphoto from './Importphoto';
+import Importphoto from './Importphoto.vue';
 import { database, DB_STORE_NAME } from '@/helper/db';
 
-export default {
-  props: {
-    running: Boolean,
-    closeRes: Function
-  },
-  computed: {
-    config: {
-      get() {
-        return this.$store.state.config;
-      }
-    },
-    remain() {
-      return (
-        this.config[this.form.category] -
-        (this.result[this.form.category]
-          ? this.result[this.form.category].length
-          : 0)
-      );
-    },
-    result() {
-      return this.$store.state.result;
-    },
-    categorys() {
-      const options = [];
-      for (const key in this.config) {
-        if (this.config.hasOwnProperty(key)) {
-          const item = this.config[key];
-          if (item > 0) {
-            let name = conversionCategoryName(key);
-            name &&
-              options.push({
-                label: name,
-                value: key
-              });
-          }
-        }
-      }
-      return options;
-    }
-  },
-  components: { Importphoto },
-  data() {
-    return {
-      showSetwat: false,
-      showImport: false,
-      showImportphoto: false,
-      showRemoveoptions: false,
-      removeInfo: { type: 0 },
-      form: {
-        category: '',
-        mode: 1,
-        qty: 1,
-        allin: false
-      },
-      listStr: ''
-    };
-  },
-  watch: {
-    showRemoveoptions(v) {
-      if (!v) {
-        this.removeInfo.type = 0;
-      }
-    }
-  },
-  methods: {
-    resetConfig() {
-      const type = this.removeInfo.type;
-      this.$confirm('此操作将重置所选数据，是否继续?', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-        .then(() => {
-          switch (type) {
-            case 0:
-              clearData();
-              this.$store.commit('setClearStore');
-              database.clear(DB_STORE_NAME);
-              break;
-            case 1:
-              removeData(configField);
-              this.$store.commit('setClearConfig');
-              break;
-            case 2:
-              removeData(listField);
-              this.$store.commit('setClearList');
-              break;
-            case 3:
-              database.clear(DB_STORE_NAME);
-              this.$store.commit('setClearPhotos');
-              break;
-            case 4:
-              removeData(resultField);
-              this.$store.commit('setClearResult');
-              break;
-            default:
-              break;
-          }
+// 定义属性和事件
+const props = defineProps({
+  running: Boolean,
+  closeRes: Function
+});
 
-          this.closeRes && this.closeRes();
+const emit = defineEmits(['toggle', 'resetConfig', 'getPhoto']);
 
-          this.showRemoveoptions = false;
-          this.$message({
-            type: 'success',
-            message: '重置成功!'
+// 使用 Pinia store
+const store = useLuckyStore();
+
+// 响应式数据
+const showSetwat = ref(false);
+const showImport = ref(false);
+const showImportphoto = ref(false);
+const showRemoveoptions = ref(false);
+const removeInfo = ref({ type: 0 });
+const form = ref({
+  category: '',
+  mode: 1,
+  qty: 1,
+  allin: false
+});
+const listStr = ref('');
+const formRef = ref(null);
+const removeFormRef = ref(null);
+
+// 计算属性
+const config = computed(() => store.config);
+const result = computed(() => store.result);
+
+const remain = computed(() => {
+  return (
+    config.value[form.value.category] -
+    (result.value[form.value.category]
+      ? result.value[form.value.category].length
+      : 0)
+  );
+});
+
+const categorys = computed(() => {
+  const options = [];
+  for (const key in config.value) {
+    if (Object.prototype.hasOwnProperty.call(config.value, key)) {
+      const item = config.value[key];
+      if (item > 0) {
+        let name = conversionCategoryName(key);
+        name &&
+          options.push({
+            label: name,
+            value: key
           });
-
-          this.$nextTick(() => {
-            this.$emit('resetConfig');
-          });
-        })
-        .catch(() => {
-          this.$message({
-            type: 'info',
-            message: '已取消'
-          });
-        });
-    },
-    onSubmit() {
-      if (!this.form.category) {
-        return this.$message.error('请选择本次抽取的奖项');
       }
-      if (this.remain <= 0) {
-        return this.$message.error('该奖项剩余人数不足');
-      }
-      if (this.form.mode === 99) {
-        if (this.form.qty <= 0) {
-          return this.$message.error('必须输入本次抽取人数');
-        }
-        if (this.form.qty > this.remain) {
-          return this.$message.error('本次抽奖人数已超过本奖项的剩余人数');
-        }
-      }
-      if (this.form.mode === 1 || this.form.mode === 5) {
-        if (this.form.mode > this.remain) {
-          return this.$message.error('本次抽奖人数已超过本奖项的剩余人数');
-        }
-      }
-      this.showSetwat = false;
-      this.$emit(
-        'toggle',
-        Object.assign({}, this.form, { remain: this.remain })
-      );
-    },
-    startHandler() {
-      this.$emit('toggle');
-      if (!this.running) {
-        this.showSetwat = true;
-      }
-    },
-    transformList() {
-      const { listStr } = this;
-      if (!listStr) {
-        this.$message.error('没有数据');
-      }
-      const list = [];
-      const rows = listStr.split('\n');
-      if (rows && rows.length > 0) {
-        rows.forEach(item => {
-          const rowList = item.split(/\t|\s/);
-          if (rowList.length >= 2) {
-            const key = Number(rowList[0].trim());
-            const name = rowList[1].trim();
-            key &&
-              list.push({
-                key,
-                name
-              });
-          }
-        });
-      }
-      this.$store.commit('setList', list);
-
-      this.$message({
-        message: '保存成功',
-        type: 'success'
-      });
-      this.showImport = false;
-      this.$nextTick(() => {
-        this.$emit('resetConfig');
-      });
     }
   }
+  return options;
+});
+
+// 监听
+watch(() => showRemoveoptions.value, (v) => {
+  if (!v) {
+    removeInfo.value.type = 0;
+  }
+});
+
+// 方法
+const resetConfig = () => {
+  const type = removeInfo.value.type;
+  ElMessageBox.confirm('此操作将重置所选数据，是否继续?', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
+    .then(() => {
+      switch (type) {
+        case 0:
+          clearData();
+          store.setClearStore();
+          database.clear(DB_STORE_NAME);
+          break;
+        case 1:
+          removeData(configField);
+          store.setClearConfig();
+          break;
+        case 2:
+          removeData(listField);
+          store.setClearList();
+          break;
+        case 3:
+          database.clear(DB_STORE_NAME);
+          store.setClearPhotos();
+          break;
+        case 4:
+          removeData(resultField);
+          store.setClearResult();
+          break;
+        default:
+          break;
+      }
+
+      if (props.closeRes) props.closeRes();
+
+      showRemoveoptions.value = false;
+      ElMessage({
+        type: 'success',
+        message: '重置成功!'
+      });
+
+      nextTick(() => {
+        emit('resetConfig');
+      });
+    })
+    .catch(() => {
+      ElMessage({
+        type: 'info',
+        message: '已取消'
+      });
+    });
+};
+
+const onSubmit = () => {
+  if (!form.value.category) {
+    return ElMessage.error('请选择本次抽取的奖项');
+  }
+  if (remain.value <= 0) {
+    return ElMessage.error('该奖项剩余人数不足');
+  }
+  if (form.value.mode === 99) {
+    if (form.value.qty <= 0) {
+      return ElMessage.error('必须输入本次抽取人数');
+    }
+    if (form.value.qty > remain.value) {
+      return ElMessage.error('本次抽奖人数已超过本奖项的剩余人数');
+    }
+  }
+  if (form.value.mode === 1 || form.value.mode === 5) {
+    if (form.value.mode > remain.value) {
+      return ElMessage.error('本次抽奖人数已超过本奖项的剩余人数');
+    }
+  }
+  showSetwat.value = false;
+  emit(
+    'toggle',
+    Object.assign({}, form.value, { remain: remain.value })
+  );
+};
+
+const startHandler = () => {
+  emit('toggle');
+  if (!props.running) {
+    showSetwat.value = true;
+  }
+};
+
+const transformList = () => {
+  if (!listStr.value) {
+    ElMessage.error('没有数据');
+    return;
+  }
+  const list = [];
+  const rows = listStr.value.split('\n');
+  if (rows && rows.length > 0) {
+    rows.forEach(item => {
+      const rowList = item.split(/\t|\s/);
+      if (rowList.length >= 2) {
+        const key = Number(rowList[0].trim());
+        const name = rowList[1].trim();
+        key &&
+          list.push({
+            key,
+            name
+          });
+      }
+    });
+  }
+  store.setList(list);
+
+  ElMessage({
+    message: '保存成功',
+    type: 'success'
+  });
+  showImport.value = false;
+  nextTick(() => {
+    emit('resetConfig');
+  });
 };
 </script>
-<style lang="scss">
+
+<style lang="scss" scoped>
 #tool {
   position: fixed;
   width: 60px;
@@ -344,12 +350,21 @@ export default {
     margin-left: 0px;
   }
 }
+
+
+
+/* 修改为全局样式 */
+</style>
+
+<!-- 添加全局样式 -->
+<style lang="scss">
 .setwat-dialog {
   .colorred {
     color: red;
     font-weight: bold;
   }
 }
+
 .import-dialog {
   .footer {
     height: 50px;
@@ -357,6 +372,7 @@ export default {
     text-align: center;
   }
 }
+
 .c-removeoptions {
   .el-dialog {
     height: 290px;
