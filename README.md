@@ -1,6 +1,6 @@
 ## 年会抽奖
 
-[演示地址](https://vitozyf.github.io/lucky-draw/index.html#/?tdsourcetag=s_pctim_aiomsg)
+[演示地址](https://cunzaizhuyi.github.io/lucky-draw-vue3/index.html#/)
 
 ## 使用说明
 
@@ -46,17 +46,23 @@
 - 建议使用最新的 Chrome 浏览器打开体验最佳。
 - 由于背景音乐加载较慢，可以在抽奖前提前打开缓存好。或者安装 windows 版本软件到本地，无需联网即可使用。
 
-## windows 软件版本
+<!-- ## windows 软件版本
 
-- 本抽奖程序的 windows 软件版本下载[安装包](https://github.com/vitozyf/lucky-draw/releases)
+- 本抽奖程序的 windows 软件版本下载[安装包](https://github.com/vitozyf/lucky-draw/releases) -->
 
-## Donation
+<!-- ## Donation
 
 如果这个开源项目对您有帮助，请作者喝杯咖啡吧
 
 Email: vito.z@qq.com
 
-![payimg](./public/pay.png)
+![payimg](./public/pay.png) -->
+
+## 致谢
+
+https://github.com/vitozyf/lucky-draw
+
+本项目来源于上面的项目，由于上述项目年久失修，启动起来非常困难。所以进行了技术升级。
 
 ## License
 
