@@ -62,7 +62,7 @@ Email: vito.z@qq.com
 
 https://github.com/vitozyf/lucky-draw
 
-本项目来源于上面的项目，由于上述项目年久失修，启动起来非常困难。所以进行了技术升级。
+本项目来源于上面的项目，由于上述项目年久失修，启动起来非常困难。所以进行了技术升级。欢迎使用。
 
 ## License
 
